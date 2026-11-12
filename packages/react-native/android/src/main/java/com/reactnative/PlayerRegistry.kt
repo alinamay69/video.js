@@ -3,6 +3,7 @@ package com.reactnative
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -15,21 +16,24 @@ import java.util.concurrent.atomic.AtomicInteger
  * main looper. Because posts are FIFO, a command issued in the same tick as
  * `createPlayer` runs after construction rather than against a missing engine —
  * the queueing the design requires falls out of the looper.
+ *
+ * The synchronous getters also land on the JS thread, so the engine map is
+ * readable from any thread; each engine guards its own state.
  */
 internal class PlayerRegistry {
   private val nextHandle = AtomicInteger(1)
   private val mainHandler = Handler(Looper.getMainLooper())
 
-  /** Main-thread only. */
-  private val engines = mutableMapOf<Int, PlayerEngine>()
+  /** Written on the main thread; read from any. */
+  private val engines = ConcurrentHashMap<Int, PlayerEngine>()
 
-  var onEvent: ((handle: Int, type: PlayerEventType) -> Unit)? = null
+  var onEvent: ((handle: Int, event: PlayerEvent) -> Unit)? = null
 
   fun create(context: Context, source: String?): Int {
     val handle = nextHandle.getAndIncrement()
 
     onMain {
-      engines[handle] = PlayerEngine(context, source) { type -> onEvent?.invoke(handle, type) }
+      engines[handle] = PlayerEngine(context, source) { event -> onEvent?.invoke(handle, event) }
     }
 
     return handle
@@ -39,9 +43,32 @@ internal class PlayerRegistry {
     onMain { engines.remove(handle)?.release() }
   }
 
-  fun command(handle: Int, block: (PlayerEngine) -> Unit) {
-    onMain { engines[handle]?.let(block) }
+  /**
+   * A command that changes state: [request] writes the state it will produce,
+   * from the calling thread so getters reflect it at once, then [block] runs
+   * on the main thread. Before the engine exists there is nothing to write to
+   * yet, so the request runs on the main thread just ahead of [block] instead.
+   *
+   * Returns whether the request ran on the calling thread.
+   */
+  fun command(handle: Int, request: (PlayerEngine) -> Unit, block: (PlayerEngine) -> Unit): Boolean {
+    val requested = engines[handle]?.also(request) != null
+
+    onMain {
+      engines[handle]?.let {
+        if (!requested) request(it)
+        block(it)
+      }
+    }
+
+    return requested
   }
+
+  /**
+   * The latest published state, from any thread. A handle whose engine doesn't
+   * exist — not built yet, or destroyed — reads as a fresh player.
+   */
+  fun state(handle: Int): PlayerState = engines[handle]?.readState() ?: PlayerState()
 
   /**
    * Synchronous lookup for the Fabric surface. Safe because the surface only
