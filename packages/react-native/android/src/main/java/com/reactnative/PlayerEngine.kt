@@ -246,6 +246,10 @@ internal class PlayerEngine(
     update { it.copy(paused = true) }
   }
 
+  fun requestPlaybackRate(rate: Double) {
+    if (rate > 0) update { it.copy(playbackRate = rate) }
+  }
+
   fun requestSeek(seconds: Double) {
     update { if (it.currentSrc.isEmpty()) it else it.copy(currentTime = seconds.coerceAtLeast(0.0), seeking = true, ended = false) }
   }
@@ -282,6 +286,16 @@ internal class PlayerEngine(
 
   fun pause() {
     exo.pause()
+  }
+
+  fun setPlaybackRate(rate: Double) {
+    if (rate > 0) exo.setPlaybackSpeed(rate.toFloat())
+  }
+
+  // ExoPlayer repeats the item in place instead of ending, so there is no
+  // `ended`, as with a looping media element.
+  fun setLoop(loop: Boolean) {
+    exo.repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
   }
 
   fun setCurrentTime(seconds: Double) {

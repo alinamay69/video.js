@@ -91,6 +91,28 @@ RCT_EXPORT_MODULE(VideoJSEngineStore)
       }]);
 }
 
+- (NSNumber *)setPlaybackRate:(NSInteger)handle rate:(double)rate
+{
+  return @([VideoJSPlayerRegistry.sharedRegistry commandPlayer:handle
+      request:^(VideoJSPlayerEngine *engine) {
+        [engine requestPlaybackRate:rate];
+      }
+      block:^(VideoJSPlayerEngine *engine) {
+        [engine setPlaybackRate:rate];
+      }]);
+}
+
+// `loop` isn't in the snapshot, so there is nothing to request.
+- (NSNumber *)setLoop:(NSInteger)handle loop:(BOOL)loop
+{
+  return @([VideoJSPlayerRegistry.sharedRegistry commandPlayer:handle
+      request:^(VideoJSPlayerEngine *engine) {
+      }
+      block:^(VideoJSPlayerEngine *engine) {
+        [engine setLoop:loop];
+      }]);
+}
+
 - (NSNumber *)getCurrentTime:(NSInteger)handle
 {
   return @([self stateForHandle:handle].currentTime);

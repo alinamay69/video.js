@@ -42,6 +42,13 @@ class VideoJSEngineStoreModule internal constructor(
   override fun setCurrentTime(handle: Double, time: Double): Boolean =
     registry.command(handle.toInt(), { it.requestSeek(time) }) { it.setCurrentTime(time) }
 
+  override fun setPlaybackRate(handle: Double, rate: Double): Boolean =
+    registry.command(handle.toInt(), { it.requestPlaybackRate(rate) }) { it.setPlaybackRate(rate) }
+
+  // `loop` isn't in the snapshot, so there is nothing to request.
+  override fun setLoop(handle: Double, loop: Boolean): Boolean =
+    registry.command(handle.toInt(), {}) { it.setLoop(loop) }
+
   override fun getCurrentTime(handle: Double): Double = state(handle).currentTime
 
   override fun getDuration(handle: Double): Double = state(handle).duration
